@@ -1,11 +1,20 @@
+from openpyxl import Workbook
+from datetime import datetime as dt
 import requests
 import hashlib
 import os
+import time
 
 class VirusScannerVT(object):
     
     def __init__(self,apiKey):
         self.apiKey=apiKey
+        self.alterKeys = [
+                     "8dd0c36fd4ef57dc1effd53d580a2d2c4413c65041abcc103fe60641dc001ea4",
+                     "a2b51c4511a5da05b595cc57e57aad2428db72ed28d66d9c72ca394f6ce47963",
+                     "e08d3ae2419f5a7f27b37db6adaf27b6d31d06d1c522b71d9b0ad8f25b542702",
+                      self.apiKey
+                      ]
         assert(self.isKeyValid(self.apiKey))
         
     def __spldate__(self,update):
@@ -26,31 +35,63 @@ class VirusScannerVT(object):
                 detected[i]={'version':jsonRes[i]['version'],'result':jsonRes[i]['result'],'update':self.__spldate__(jsonRes[i]['update'])}
         return detected
 
-    def scanHash(self,h):
-        params = {'apikey': self.apiKey, 'resource': h}
-        url = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
-        res=url.json()
+    
+    
+    def scanHash(self,h,key=False):
+        if not key:
+            params = {'apikey': self.apiKey, 'resource': h}
+        else:
+            params = {'apikey': key, 'resource': h}
+        c=0
+        while True:
+            url = requests.get('https://www.virustotal.com/vtapi/v2/file/report', params=params)
+            if url.status_code==200:
+                res=url.json()
+                break
+            elif url.status_code==204:
+                print(True)
+                params = {'apikey': self.alterKeys[c], 'resource': h}
+            if c==3:
+                c=0
+            else:
+                c+=1 
         if res['positives'] > 0:
             return self.__sortDetected__(res['scans'])
         return False
             
     
-    def scanFile(self,path):
+    
+    def scanFile(self,path,key=False):
+        if not key:
+            key = self.apiKey
         h = hashlib.sha256(open(path,'rb').read()).hexdigest()
-        return self.scanHash(h)
+        #print(h)
+        return self.scanHash(h,key=key)
+    
     
     
     def scanDir(self,path):
         res={}
+        c=0
+        n=0
         for i in self.__all_files_recursive__(path):
             try:
-                detect = self.scanFile(i)
+                detect = self.scanFile(i,key=self.alterKeys[n])
                 if detect:
                     res[i]=detect
             except Exception as e:
-                #print(e)
+                print(e,type(e))
                 pass
+            c+=1
+            if c==4:
+                if n==3:
+                    n=0
+                else:
+                    n+=1
+                c=0
+            
         return self.__reprot__(res)
+    
     
     
     def __all_files_recursive__(self,path):
@@ -75,6 +116,10 @@ class VirusScannerVT(object):
     
     
     def temp(self):
+        try:
+            os.remove(os.environ['AppData']+os.sep+'VT Report'+os.sep+'Report.xlsx')
+        except:
+            pass
         try:
             os.mkdir(os.environ['AppData']+os.sep+'VT Report')
         except FileExistsError:
@@ -135,6 +180,7 @@ def main():
     
     else:
         path=input('Please Enter path to your Directory: ')
+        VirusScannerVT(key).scanDir(path)
         
     
     
@@ -142,6 +188,4 @@ def main():
 if __name__=='__main__':
     main()
     
-    
-    
-    
+
